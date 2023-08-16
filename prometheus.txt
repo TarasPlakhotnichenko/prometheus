@@ -68,11 +68,30 @@ docker port graphana
 ---
 3000/tcp -> 0.0.0.0:32769
 ---
-http://192.168.1.9:32769/login
 
-4.2 Graphana -> Configuration -> Data source -> Add data source -> Prometheus -> http://192.168.1.9:9090 -> Save & Test: "Data source is working"
-4.3 Explore
-4.4 Dashboards -> New -> New dashboard-> Add a new panel ...->... Save
+4.2 http://192.168.1.9:32770/login
+
+4.3 Graphana -> Configuration -> Data source -> Add data source -> Prometheus -> http://192.168.1.9:9090 -> Save & Test: "Data source is working"
+4.4 Explore
+4.5 Dashboards -> New -> New dashboard-> Add a new panel ...->... Save
+
+5) Make grafana storage persistent (resilient to container restart) and check it out how it overcomes restarting:
+
+docker volume create grafana-storage
+docker stop 4d8681970b2f
+docker run -d -p 3000:3000  --restart=always -e "GF_SECURITY_ADMIN_PASSWORD=secret" -v grafana-storage:/var/lib/grafana  ubuntu/grafana
+
+
+ 
+#sudo service --status-all
+#sudo systemctl start  prometheus
+#systemctl enable prometheus
+#systemctl status prometheus
+
+
+
+
+
 
 
 
