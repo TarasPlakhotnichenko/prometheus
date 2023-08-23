@@ -1,0 +1,232 @@
+1) VBoxManage.exe  modifyhd "C:\Users\taras\VirtualBox VMs\Ubuntu-20-04-01_server\Ubuntu-20-04-01_server.vdi" --resize 500000
+2) fdisk /dev/sda -> n <enter> ->  +450000M
+---
+Created a new partition 4 of type 'Linux filesystem' and of size 439.5 GiB.
+---
+3) fdisk /dev/sda -> t -> 8e -> w
+---
+The partition table has been altered.
+---
+
+4) sudo partprobe
+
+5) pvcreate /dev/sda4
+
+6) sudo pvcreate /dev/sda4
+
+7)  sudo vgdisplay
+
+8) sudo vgextend ubuntu-vg /dev/sda4
+--
+Volume group "ubuntu-vg" successfully extended
+---
+
+9) sudo lvextend -l +100%FREE /dev/ubuntu-vg/ubuntu-lv
+---
+  Size of logical volume ubuntu-vg/ubuntu-lv changed from <11.14 GiB (2851 exten                                                                                                              ts) to <450.59 GiB (115350 extents).
+  Logical volume ubuntu-vg/ubuntu-lv successfully resized.
+---  
+
+10) df -T
+---
+/dev/mapper/ubuntu--vg-ubuntu--lv ext4      11387840 10768080     19492 100% /
+---
+
+11) sudo resize2fs /dev/mapper/ubuntu--vg-ubuntu--lv
+---
+The filesystem on /dev/mapper/ubuntu--vg-ubuntu--lv is now 118118400 (4k) blocks long.
+---
+
+12) df -T
+---
+/dev/mapper/ubuntu--vg-ubuntu--lv ext4     464994340 10768192 435199252   3% /
+---
+
+=====================
+Loki
+
+0) mkdir ~/loki
+1) git clone https://github.com/grafana/loki
+2) cd loki/loki
+3) go build ./cmd/loki
+4) mv loki /usr/local/bin/
+5) mkdir /etc/loki
+6) mv cmd/loki/loki-local-config.yaml /etc/loki/
+---
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /tmp/loki
+  storage:
+    filesystem:
+      chunks_directory: /tmp/loki/chunks
+      rules_directory: /tmp/loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+query_range:
+  results_cache:
+    cache:
+      embedded_cache:
+        enabled: true
+        max_size_mb: 100
+
+schema_config:
+  configs:
+    - from: 2020-10-24
+      store: boltdb-shipper
+      object_store: filesystem
+      schema: v11
+      index:
+        prefix: index_
+        period: 24h
+
+ruler:
+  alertmanager_url: http://localhost:9093
+
+
+---
+#useradd --no-create-home --shell /bin/false loki
+#chown loki:loki /usr/local/bin/loki
+#chown -R loki:loki /etc/loki
+
+7) vi /etc/systemd/system/loki.service
+
+---
+[Unit]
+Description=Grafana Loki Service
+After=network.target
+
+[Service]
+User=loki
+Group=loki
+Type=simple
+ExecStart=/usr/local/bin/loki -config.file=/etc/loki/loki-local-config.yaml
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+---
+8) systemctl daemon-reload
+
+9) systemctl enable loki --now
+10) systemctl status loki
+
+13) sudo /usr/local/bin/loki -config.file=/etc/loki/loki-local-config.yaml
+
+
+
+13) http://192.168.1.9:3100/metrics
+
+---
+# HELP cortex_consul_request_duration_seconds Time spent on consul requests.
+# TYPE cortex_consul_request_duration_seconds histogram
+cortex_consul_request_duration_seconds_bucket{kv_name="ingester-ring",operation="CAS loop",status_code="200",le="0.005"} 16
+cortex_consul_request_duration_seconds_bucket{kv_name="ingester-ring",operation="CAS loop",status_code="200",le="0.01"} 16
+cortex_consul_request_duration_seconds_bucket{kv_name="ingester-ring",operation="CAS loop",status_code="200",le="0.025"} 16
+cortex_consul_request_duration_seconds_bucket{kv_name="ingester-ring",operation="CAS loop",status_code="200",le="0.05"} 16
+cortex_consul_request_duration_seconds_bucket{kv_name="ingester-ring",operation="CAS loop",status_code="200",le="0.1"} 16
+cortex_consul_request_duration_seconds_bucket{kv_name="ingester-ring",operation="CAS loop",status_code="200",le="0.25"} 16
+cortex_consul_request_duration_seconds_bucket{kv_name="ingester-ring",operation="CAS loop",status_code="200",le="0.5"} 16
+cortex_consul_request_duration_seconds_bucket{kv_name="ingester-ring",operation="CAS loop",status_code="200",le="1"} 16
+cortex_consul_request_duration_seconds_bucket{kv_name="ingester-ring",operation="CAS loop",status_code="200",le="2.5"} 16
+cortex_consul_request_duration_seconds_bucket{kv_name="ingester-ring",operation="CAS loop",status_code="200",le="5"} 16
+cortex_consul_request_duration_seconds_bucket{kv_name="ingester-ring",operation="CAS loop",status_code="200",le="10"} 16
+cortex_consul_request_duration_seconds_bucket{kv_name="ingester-ring",operation="CAS loop",status_code="200",le="+Inf"} 16
+cortex_consul_request_duration_seconds_sum{kv_name="ingester-ring",operation="CAS loop",status_code="200"} 0.001338373
+cortex_consul_request_duration_seconds_count{kv_name="ingester-ring",operation="CAS loop",status_code="200"} 16
+...
+---
+
+=====================
+Promtail
+
+
+1) wget https://github.com/grafana/loki/releases/latest/download/promtail-linux-amd64.zip
+2) unzip promtail-linux-amd64.zip
+3) mv promtail-linux-amd64 /usr/local/bin/promtail
+4) mkdir /etc/promtail
+5) vi /etc/promtail/promtail.yaml
+---
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://192.168.1.9:3100/loki/api/v1/push
+
+scrape_configs:
+- job_name: my_logs
+  static_configs:
+  - targets:
+      - localhost
+    labels:
+      job: dmsglogs
+      __path__: /var/log/syslog
+---
+6) vi /etc/systemd/system/promtail.service
+---
+[Unit]
+Description=Promtail Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/promtail -config.file=/etc/promtail/promtail.yaml
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+---
+
+7) systemctl daemon-reload
+8) systemctl enable promtail --now
+9) systemctl status promtail	  
+10) vi /etc/promtail/promtail.yaml
+
+---
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://192.168.1.9:3100/loki/api/v1/push
+
+scrape_configs:
+- job_name: my_logs
+  static_configs:
+  - targets:
+      - localhost
+    labels:
+      job: dmsglogs
+      __path__: /var/log/syslog
+
+11) sudo systemctl restart promtail	  
+
+12) http://192.168.1.9:9080/targets
+
+TYPE	Ready	Labels	
+FILE	TRUE	job="dmsglogs" 
+
+==================
+Grafana
+
+1) Configuration - Data Sources -> Add data source -> Loki:
+HTTP -> URL: http://192.168.1.9:3100 
+
+
