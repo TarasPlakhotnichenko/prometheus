@@ -124,7 +124,7 @@ WantedBy=multi-user.target
 
 
 
-13) http://192.168.1.9:3100/metrics
+14) http://192.168.1.9:3100/metrics
 
 ---
 # HELP cortex_consul_request_duration_seconds Time spent on consul requests.
